@@ -1,0 +1,21 @@
+{
+  "name": "arcwave",
+  "module": "src/arcwave.ts",
+  "types": "src/arcwave.ts",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/arcwave.ts",
+    "./h11": "./src/adapters/h11.ts"
+  },
+  "dependencies": {
+    "jose": "^6",
+    "h11": "^1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
