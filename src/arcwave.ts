@@ -7,11 +7,11 @@ export {
 
 export { buildUrl } from "./utils.ts";
 export { getToken } from "./token.ts";
-export { HttpAuth } from "./http.ts";
+export { AuthCore as HttpAuth } from "./core.ts";
 export type {
   Account,
-  ProviderConfig,
   CreateUrlBaseProps,
   GetTokenBaseProps,
   GetUserBaseProps,
-} from "./http.ts";
+} from "./core.ts";
+export type { ProviderConfig } from "./types.ts";

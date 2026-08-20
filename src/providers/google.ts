@@ -2,13 +2,13 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { buildUrl } from "../utils.ts";
 import { getToken } from "../token.ts";
 import {
-  HttpAuth,
+  AuthCore,
   type Account,
   type CreateUrlBaseProps,
   type GetTokenBaseProps,
   type GetUserBaseProps,
-  type ProviderConfig,
-} from "../http.ts";
+} from "../core.ts";
+import type { ProviderConfig } from "../types.ts";
 
 const AUTHORIZATION_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -17,14 +17,9 @@ const ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
 
 const jwks = createRemoteJWKSet(new URL(JWKS_URI));
 
-export type GoogleCreateUrlProps = CreateUrlBaseProps & {
-  codeChallenge: string;
-  nonce: string;
-};
+export type GoogleCreateUrlProps = CreateUrlBaseProps;
 
-export type GoogleGetTokenProps = GetTokenBaseProps & {
-  codeVerifier: string;
-};
+export type GoogleGetTokenProps = GetTokenBaseProps;
 
 export type GoogleTokens = GetUserBaseProps & {
   id_token: string;
@@ -40,7 +35,7 @@ type GoogleIDTokenClaims = {
   picture?: string;
 };
 
-export class GoogleAuth extends HttpAuth<
+export class GoogleAuth extends AuthCore<
   GoogleCreateUrlProps,
   GoogleGetTokenProps,
   GoogleTokens
@@ -50,10 +45,10 @@ export class GoogleAuth extends HttpAuth<
       client_id: this.config.clientId,
       redirect_uri: props.redirectUri ?? this.config.redirectUri,
       response_type: "code",
-      scope: props.scope.join(" "),
+      scope: this.config.scope.join(" "),
       state: props.state,
       nonce: props.nonce,
-      code_challenge: props.codeChallenge,
+      code_challenge: props.challenge,
       code_challenge_method: "S256",
     });
   }
@@ -65,7 +60,7 @@ export class GoogleAuth extends HttpAuth<
       redirect_uri: props.redirectUri ?? this.config.redirectUri,
       client_id: this.config.clientId,
       client_secret: this.config.clientSecret,
-      code_verifier: props.codeVerifier,
+      code_verifier: props.verifier,
     });
   }
 
@@ -79,10 +74,18 @@ export class GoogleAuth extends HttpAuth<
       },
     );
 
+    if (payload.email_verified === false || !payload.email) {
+      throw new Error("Invalid email");
+    }
+
+    if (!payload.name) {
+      throw new Error("Invalid name");
+    }
+
     return {
       id: payload.sub,
-      email: payload.email ?? "",
-      name: payload.name ?? "",
+      email: payload.email,
+      name: payload.name,
       avatarUrl: payload.picture ?? null,
       raw: payload,
     };

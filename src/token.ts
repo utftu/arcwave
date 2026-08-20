@@ -1,17 +1,3 @@
-// export class TokenError extends Error {
-//   readonly code: string;
-//   readonly description?: string;
-//   readonly uri?: string;
-
-//   constructor(code: string, description?: string, uri?: string) {
-//     super(description ?? code);
-//     this.name = "TokenError";
-//     this.code = code;
-//     this.description = description;
-//     this.uri = uri;
-//   }
-// }
-
 export async function getToken<T>(
   endpoint: string,
   body: Record<string, string | undefined>,
@@ -39,9 +25,6 @@ export async function getToken<T>(
   return data as T;
 }
 
-// Some providers (GitHub) return `{ error, error_description }` with a 200 status
-// instead of following RFC 6749 §5.2's 400, so `error` in the body is the source
-// of truth — not response.ok.
 function checkError(
   data: unknown,
 ): data is { error: string; error_description?: string; error_uri?: string } {

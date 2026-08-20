@@ -1,17 +1,15 @@
-export type ProviderConfig = {
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-};
+import type { ProviderConfig } from "./types.ts";
 
 export type CreateUrlBaseProps = {
   state: string;
-  scope: string[];
+  nonce: string;
+  challenge: string;
   redirectUri?: string;
 };
 
 export type GetTokenBaseProps = {
   code: string;
+  verifier: string;
   redirectUri?: string;
 };
 
@@ -29,12 +27,12 @@ export type Account = {
   raw: unknown;
 };
 
-export abstract class HttpAuth<
+export abstract class AuthCore<
   CreateUrlProps extends CreateUrlBaseProps = CreateUrlBaseProps,
   GetTokenProps extends GetTokenBaseProps = GetTokenBaseProps,
   GetUserProps extends GetUserBaseProps = GetUserBaseProps,
 > {
-  constructor(protected readonly config: ProviderConfig) {}
+  constructor(public readonly config: ProviderConfig) {}
 
   abstract createUrl(opts: CreateUrlProps): Promise<URL> | URL;
   abstract getToken(input: GetTokenProps): Promise<GetUserProps>;

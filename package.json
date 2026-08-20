@@ -9,8 +9,9 @@
     "./h11": "./src/adapters/h11.ts"
   },
   "dependencies": {
-    "jose": "^6",
-    "h11": "^1"
+    "drizzle-orm": "^0.45",
+    "h11": "^1.0.6",
+    "jose": "^6"
   },
   "devDependencies": {
     "@types/bun": "latest"
