@@ -1,6 +1,7 @@
 {
   "name": "arcwave",
   "version": "0.0.1",
+  "license": "MIT",
   "module": "dist/arcwave.js",
   "types": "dist/arcwave.d.ts",
   "type": "module",

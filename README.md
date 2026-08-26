@@ -217,10 +217,26 @@ git push --tags
 ```
 
 `.github/workflows/publish.yml` re-runs the type check and full test suite,
-verifies the tag matches `package.json`'s `version`, and runs `bun publish`
-(needs an `NPM_TOKEN` secret with publish rights on the `arcwave` package).
-`bun publish` runs the `build` script itself via `prepublishOnly`, so the
-published tarball only ever contains `dist/`, never raw `src/`.
+runs `bun run build` (published tarball only ever contains `dist/`, never raw
+`src/`), then `bun publish` (needs an `NPM_TOKEN` secret with publish rights
+on the `arcwave` package). The tag is just the trigger — whatever version is
+currently in `package.json` is what gets published, so bump it before
+tagging.
+
+If a tag push didn't result in a publish (e.g. the workflow failed), pushing
+the same tag again requires deleting it first — git won't silently overwrite
+an existing remote tag:
+
+```sh
+git tag -d v0.1.0
+git push origin :refs/tags/v0.1.0
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+## License
+
+[MIT](./LICENSE)
 
 ## Status
 
