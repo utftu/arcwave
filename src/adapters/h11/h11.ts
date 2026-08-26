@@ -1,6 +1,7 @@
 export { createStage1Handler } from "./stage1.ts";
 export { clearAuthCookies, createStage2Handler } from "./stage2.ts";
 export { createAuthGuard } from "./guard.ts";
+export { createLogoutHandler } from "./logout.ts";
 export { createSession, deleteSession, getSessionUser } from "./session.ts";
 export type { Providers } from "./types.ts";
 export type { Db } from "./db.ts";

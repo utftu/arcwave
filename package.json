@@ -1,12 +1,26 @@
 {
   "name": "arcwave",
-  "module": "src/arcwave.ts",
-  "types": "src/arcwave.ts",
+  "version": "0.1.0",
+  "module": "dist/arcwave.js",
+  "types": "dist/arcwave.d.ts",
   "type": "module",
-  "private": true,
   "exports": {
-    ".": "./src/arcwave.ts",
-    "./h11": "./src/adapters/h11/h11.ts"
+    ".": {
+      "types": "./dist/arcwave.d.ts",
+      "default": "./dist/arcwave.js"
+    },
+    "./h11": {
+      "types": "./dist/adapters/h11/h11.d.ts",
+      "default": "./dist/adapters/h11/h11.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build:js": "bun build ./src/arcwave.ts ./src/adapters/h11/h11.ts --outdir dist --root src --target node --format esm --packages=external",
+    "build:types": "tsc -p tsconfig.build.json",
+    "build": "bun run build:js && bun run build:types"
   },
   "dependencies": {
     "drizzle-orm": "^0.45",
@@ -14,6 +28,7 @@
     "jose": "^6"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/bun": "latest"
   },
   "peerDependencies": {

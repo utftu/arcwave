@@ -70,6 +70,7 @@ import {
   createStage1Handler,
   createStage2Handler,
   createAuthGuard,
+  createLogoutHandler,
   createAccountsTable,
   createUsersTable,
   createSessionsTable,
@@ -105,13 +106,22 @@ h11.get(
   }),
 );
 
-h11.get(
+// createAuthGuard must go through h11's `.use()`, not as an inline handler in
+// `.get()` — only `.use()` widens the returned H11 instance's `TData` type so
+// `ctx.data.user` type-checks (without a cast) on routes registered after it.
+const protectedRoutes = h11.use(
   "/dashboard",
   createAuthGuard({ db, sessionsTable: sessions, usersTable: users, redirectTo: "/login" }),
-  (ctx) => {
-    const user = (ctx.data as { user?: { name: string } }).user;
-    return new Response(`Welcome, ${user?.name}`);
-  },
+);
+
+protectedRoutes.get(
+  "/dashboard",
+  (ctx) => new Response(`Welcome, ${ctx.data.user.name}`),
+);
+
+h11.get(
+  "/logout",
+  createLogoutHandler({ db, sessionsTable: sessions, redirect: "/" }),
 );
 
 const provider = createBunProvider({ h11 });
@@ -131,7 +141,12 @@ creates a session row, and sets the session cookie before redirecting.
 `createAuthGuard` protects a route: reads the session cookie, looks the
 session up in `arcwave_sessions` (rejecting expired ones), and either
 attaches the matching `user` row to `ctx.data.user` and lets the chain
-continue, or redirects to `redirectTo` if there's no valid session.
+continue, or responds with 401 — or, if `redirectTo` is given, redirects
+there instead.
+
+`createLogoutHandler` deletes the session row (best-effort — a DB failure
+still clears the cookie so the user isn't stuck looking logged in) and
+clears the session cookie.
 
 ### Schema
 
@@ -150,8 +165,8 @@ export const sessions = createSessionsTable({ usersTable: users });
 Run migrations the normal way: `bunx drizzle-kit generate` / `migrate`.
 
 Sessions are opaque bearer tokens stored server-side (not signed/stateless),
-so revoking one is a plain delete — `deleteSession({ db, sessionsTable,
-sessionId })` from `arcwave/h11` — e.g. for a logout route.
+so revoking one is a plain delete — see `createLogoutHandler` above, or call
+`deleteSession({ db, sessionsTable, sessionId })` from `arcwave/h11` directly.
 
 ## Why arcwave links accounts by email automatically
 
@@ -170,8 +185,44 @@ left as a flag.
 bun test
 ```
 
+Most tests are unit-level (mocked `fetch`/`jose` for the providers, structural
+checks for the schema). `src/adapters/h11/db.integration.test.ts` runs
+against [PGlite](https://pglite.dev) — real Postgres compiled to WASM,
+in-process, no server or Docker needed — to exercise things mocks can't:
+`ON CONFLICT` upsert semantics, the FK-linked user/account/session join,
+cross-provider linking by verified email. It runs as part of `bun test`
+with no extra setup, locally and in CI.
+
+## Building
+
+```sh
+bun run build
+```
+
+Bundles both entry points with `bun build` (`dist/arcwave.js`,
+`dist/adapters/h11/h11.js`; `h11`/`drizzle-orm`/`jose` stay external, not
+inlined) and emits matching `.d.ts` files via `tsc -p tsconfig.build.json`.
+`dist` is gitignored — it's a build artifact, not committed source. The repo
+ships TypeScript source (`src/`); `dist` only exists for what actually gets
+published to npm.
+
+## Releasing
+
+Publishing to npm happens in CI, triggered by pushing a tag:
+
+```sh
+# bump "version" in package.json first, then:
+git tag v0.1.0
+git push --tags
+```
+
+`.github/workflows/publish.yml` re-runs the type check and full test suite,
+verifies the tag matches `package.json`'s `version`, and runs `bun publish`
+(needs an `NPM_TOKEN` secret with publish rights on the `arcwave` package).
+`bun publish` runs the `build` script itself via `prepublishOnly`, so the
+published tarball only ever contains `dist/`, never raw `src/`.
+
 ## Status
 
 - Providers: Google (OIDC), GitHub (OAuth2, no PKCE/nonce support on GitHub's
   side).
-- No CI yet.

@@ -20,19 +20,6 @@ const usersTable = {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 };
 
-// function createUsersColumns() {
-//   return {
-//     id: text("id")
-//       .primaryKey()
-//       .$defaultFn(() => crypto.randomUUID()),
-//     email: text("email").notNull(),
-//     name: text("name").notNull(),
-//     avatarUrl: text("avatar_url"),
-//     createdAt: timestamp("created_at").notNull().defaultNow(),
-//     updatedAt: timestamp("updated_at").notNull().defaultNow(),
-//   };
-// }
-
 export function createUsersTable(opts?: {
   schema?: string;
   tableName?: string;
