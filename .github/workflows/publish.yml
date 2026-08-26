@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +27,8 @@ jobs:
 
       - run: bun run build
 
-      - run: bun publish
-        env:
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # `bun publish` doesn't support npm's OIDC trusted publishing yet
+      # (oven-sh/bun#22423, #24855) — trusted publishing needs npm's own CLI.
+      - run: npm install -g npm@latest
+
+      - run: npm publish
