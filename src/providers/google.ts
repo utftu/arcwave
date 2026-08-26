@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { buildUrl } from "../utils.ts";
-import { getToken } from "../token.ts";
+import { getToken } from "../token/token.ts";
 import {
   AuthCore,
   type Account,
@@ -33,6 +33,7 @@ type GoogleIDTokenClaims = {
   email_verified?: boolean;
   name?: string;
   picture?: string;
+  nonce?: string;
 };
 
 export class GoogleAuth extends AuthCore<
@@ -53,8 +54,11 @@ export class GoogleAuth extends AuthCore<
     });
   }
 
-  getToken(props: GoogleGetTokenProps): Promise<GoogleTokens> {
-    return getToken<GoogleTokens>(TOKEN_ENDPOINT, {
+  async getToken(props: GoogleGetTokenProps): Promise<GoogleTokens> {
+    // Google's token endpoint response doesn't carry `nonce` — it's not part of
+    // the OAuth spec's token response. Fold it in from the input so it survives
+    // into `getUser`, where it's checked against the id_token's `nonce` claim.
+    const tokens = await getToken<Omit<GoogleTokens, "nonce">>(TOKEN_ENDPOINT, {
       grant_type: "authorization_code",
       code: props.code,
       redirect_uri: props.redirectUri ?? this.config.redirectUri,
@@ -62,6 +66,7 @@ export class GoogleAuth extends AuthCore<
       client_secret: this.config.clientSecret,
       code_verifier: props.verifier,
     });
+    return { ...tokens, nonce: props.nonce };
   }
 
   async getUser(tokens: GoogleTokens): Promise<Account> {
@@ -73,6 +78,10 @@ export class GoogleAuth extends AuthCore<
         audience: this.config.clientId,
       },
     );
+
+    if (payload.nonce !== tokens.nonce) {
+      throw new Error("Invalid nonce");
+    }
 
     if (payload.email_verified === false || !payload.email) {
       throw new Error("Invalid email");

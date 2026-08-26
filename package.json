@@ -6,11 +6,11 @@
   "private": true,
   "exports": {
     ".": "./src/arcwave.ts",
-    "./h11": "./src/adapters/h11.ts"
+    "./h11": "./src/adapters/h11/h11.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45",
-    "h11": "^1.0.6",
+    "h11": "^1.0.8",
     "jose": "^6"
   },
   "devDependencies": {

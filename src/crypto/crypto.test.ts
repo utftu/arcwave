@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { createPKCE, randomToken, sha256Hex, compareSafeTime } from "./arcwave.ts";
+import {
+  createPKCE,
+  randomToken,
+  sha256Hex,
+  compareSafeTime,
+} from "../arcwave.ts";
 
 const UNRESERVED = /^[A-Za-z0-9\-._~]+$/;
 

@@ -10,12 +10,14 @@ export type CreateUrlBaseProps = {
 export type GetTokenBaseProps = {
   code: string;
   verifier: string;
+  nonce: string;
   redirectUri?: string;
 };
 
 export type GetUserBaseProps = {
   access_token: string;
   token_type: string;
+  nonce: string;
   scope?: string;
 };
 
