@@ -28,8 +28,6 @@ jobs:
 
       - run: bun run build
 
-      # `bun publish` doesn't support npm's OIDC trusted publishing yet
-      # (oven-sh/bun#22423, #24855) — trusted publishing needs npm's own CLI.
       - run: npm install -g npm@latest
 
       - run: npm publish
