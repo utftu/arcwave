@@ -1,13 +1,27 @@
 import { describe, expect, test } from "bun:test";
 import { getTableConfig } from "drizzle-orm/pg-core";
-import { createAccountsTable, createUsersTable } from "./schema.ts";
+import {
+  accounts,
+  arcwaveSchema,
+  createAccountsTable,
+  createUsersTable,
+  sessions,
+  users,
+} from "./schema.ts";
 
 describe("createUsersTable", () => {
-  test("defaults to table name arcwave_users with no schema namespace", () => {
+  test("defaults to table name users in the arcwave schema", () => {
     const table = createUsersTable();
     const config = getTableConfig(table);
 
-    expect(config.name).toBe("arcwave_users");
+    expect(config.name).toBe("users");
+    expect(config.schema).toBe("arcwave");
+  });
+
+  test("schema public creates the table without a schema namespace", () => {
+    const table = createUsersTable({ schema: "public" });
+    const config = getTableConfig(table);
+
     expect(config.schema).toBeUndefined();
   });
 
@@ -24,7 +38,7 @@ describe("createUsersTable", () => {
     const config = getTableConfig(table);
 
     const emailIndex = config.indexes.find(
-      (index) => index.config.name === "arcwave_users_email_idx",
+      (index) => index.config.name === "users_email_idx",
     );
     expect(emailIndex).toBeDefined();
     expect(emailIndex?.config.unique).toBe(true);
@@ -32,13 +46,13 @@ describe("createUsersTable", () => {
 });
 
 describe("createAccountsTable", () => {
-  test("defaults to table name arcwave_accounts with no schema namespace", () => {
+  test("defaults to table name accounts in the arcwave schema", () => {
     const users = createUsersTable();
     const table = createAccountsTable({ usersTable: users });
     const config = getTableConfig(table);
 
-    expect(config.name).toBe("arcwave_accounts");
-    expect(config.schema).toBeUndefined();
+    expect(config.name).toBe("accounts");
+    expect(config.schema).toBe("arcwave");
   });
 
   test("accepts a custom table name and schema namespace", () => {
@@ -60,7 +74,7 @@ describe("createAccountsTable", () => {
     const config = getTableConfig(table);
 
     const providerIndex = config.indexes.find(
-      (index) => index.config.name === "arcwave_accounts_provider_account_id_idx",
+      (index) => index.config.name === "accounts_provider_account_id_idx",
     );
     expect(providerIndex).toBeDefined();
     expect(providerIndex?.config.unique).toBe(true);
@@ -79,5 +93,35 @@ describe("createAccountsTable", () => {
       foreignKey.reference().columns.some((column) => column.name === "user_id"),
     );
     expect(fk).toBeDefined();
+  });
+});
+
+describe("default exports", () => {
+  test("tables live in the exported arcwave schema", () => {
+    expect(arcwaveSchema.schemaName).toBe("arcwave");
+
+    for (const table of [users, accounts, sessions]) {
+      expect(getTableConfig(table).schema).toBe(arcwaveSchema.schemaName);
+    }
+  });
+
+  test("default table names are users, accounts, sessions", () => {
+    expect(getTableConfig(users).name).toBe("users");
+    expect(getTableConfig(accounts).name).toBe("accounts");
+    expect(getTableConfig(sessions).name).toBe("sessions");
+  });
+});
+
+describe("timestamps", () => {
+  test("every timestamp column is timestamp with time zone", () => {
+    for (const table of [users, accounts, sessions]) {
+      for (const column of getTableConfig(table).columns) {
+        if (column.columnType !== "PgTimestamp") {
+          continue;
+        }
+
+        expect(column.getSQLType()).toBe("timestamp with time zone");
+      }
+    }
   });
 });

@@ -7,5 +7,5 @@
     "rootDir": "src",
     "outDir": "dist"
   },
-  "include": ["src/arcwave.ts", "src/adapters/h11/h11.ts"]
+  "include": ["src/arcwave.ts", "src/adapters/h11/h11.ts", "src/db/schema.ts"]
 }

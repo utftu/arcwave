@@ -60,8 +60,8 @@ what makes automatic account linking by email (see below) safe.
 ## h11 adapter
 
 `arcwave/h11` wires the OAuth flow into two route handlers for the
-[h11](https://github.com) framework, plus a fixed, arcwave-owned Drizzle
-schema for persistence.
+[h11](https://github.com) framework. Persistence uses the arcwave-owned
+Drizzle tables from `arcwave/schema`.
 
 ```ts
 import { H11 } from "h11";
@@ -71,19 +71,13 @@ import {
   createStage2Handler,
   createAuthGuard,
   createLogoutHandler,
-  createAccountsTable,
-  createUsersTable,
-  createSessionsTable,
 } from "arcwave/h11";
 import { google } from "arcwave";
 import { drizzle } from "drizzle-orm/bun-sql";
+import { accounts, sessions, users } from "./db/schema.ts"; // see "Schema" below
 
 const providers = { google: google({ /* ... */ }) };
 const db = drizzle(process.env.DATABASE_URL!);
-
-const users = createUsersTable();
-const accounts = createAccountsTable({ usersTable: users });
-const sessions = createSessionsTable({ usersTable: users });
 
 const h11 = new H11();
 
@@ -139,7 +133,7 @@ by verified email, `account` row upserted by `(provider, providerAccountId)`),
 creates a session row, and sets the session cookie before redirecting.
 
 `createAuthGuard` protects a route: reads the session cookie, looks the
-session up in `arcwave_sessions` (rejecting expired ones), and either
+session up in `arcwave.sessions` (rejecting expired ones), and either
 attaches the matching `user` row to `ctx.data.user` and lets the chain
 continue, or responds with 401 — or, if `redirectTo` is given, redirects
 there instead.
@@ -150,17 +144,61 @@ clears the session cookie.
 
 ### Schema
 
-arcwave owns a fixed schema (`arcwave_users`, `arcwave_accounts`,
-`arcwave_sessions`) so you don't have to hand-write it, but **you** own the
-Drizzle connection and migrations — arcwave has no driver dependency and
-never touches `drizzle-kit` itself.
+arcwave owns a fixed set of tables (`users`, `accounts`, `sessions`) in the
+Postgres schema `arcwave`, so you don't have to hand-write them, but **you**
+own the Drizzle connection and migrations — arcwave has no driver dependency
+and never touches `drizzle-kit` itself.
+
+Re-export the ready-made tables from your own schema file:
 
 ```ts
-// your own app/db/schema.ts, pointed to by drizzle.config.ts
-export const users = createUsersTable(); // optional: { schema, tableName }
-export const accounts = createAccountsTable({ usersTable: users });
-export const sessions = createSessionsTable({ usersTable: users });
+// app/db/schema.ts, pointed to by drizzle.config.ts
+export { arcwaveSchema, users, accounts, sessions } from "arcwave/schema";
+
+// ...your own tables
 ```
+
+`drizzle-kit` loads that file and picks up every exported table and schema,
+whatever the export is called. Exporting `arcwaveSchema` is what makes it emit
+`CREATE SCHEMA "arcwave"` — without it the migration fails on a database that
+doesn't have the schema yet.
+
+`drizzle-kit push` / `pull` only look at `public` by default, so add the schema
+to `drizzle.config.ts` (`generate` / `migrate` don't need it):
+
+```ts
+export default defineConfig({
+  dialect: "postgresql",
+  schema: "./app/db/schema.ts",
+  schemaFilter: ["public", "arcwave"],
+  // ...
+});
+```
+
+Pass the same tables to the handlers:
+
+```ts
+import { accounts, sessions, users } from "./db/schema.ts";
+```
+
+#### Custom schema or table names
+
+The factories behind the defaults are exported from `arcwave/schema` too
+(and from `arcwave/h11`). Export your own `pgSchema` so `drizzle-kit` creates it:
+
+```ts
+import { pgSchema } from "drizzle-orm/pg-core";
+import { createAccountsTable, createSessionsTable, createUsersTable } from "arcwave/schema";
+
+export const authSchema = pgSchema("auth");
+export const users = createUsersTable({ schema: "auth" }); // optional: tableName
+export const accounts = createAccountsTable({ schema: "auth", usersTable: users });
+export const sessions = createSessionsTable({ schema: "auth", usersTable: users });
+```
+
+With `schema: "public"` nothing needs to be exported, but the default names
+`users` / `accounts` / `sessions` will likely clash with your own tables —
+pass `tableName` too.
 
 Run migrations the normal way: `bunx drizzle-kit generate` / `migrate`.
 

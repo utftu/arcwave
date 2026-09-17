@@ -9,6 +9,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { randomToken } from "../crypto/crypto.ts";
 
+const DEFAULT_SCHEMA = "arcwave";
+
 const usersTable = {
   id: text("id")
     .primaryKey()
@@ -16,18 +18,19 @@ const usersTable = {
   email: text("email").notNull(),
   name: text("name").notNull(),
   avatarUrl: text("avatar_url"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 };
 
 export function createUsersTable(opts?: {
   schema?: string;
   tableName?: string;
 }) {
-  const tableName = opts?.tableName ?? "arcwave_users";
+  const tableName = opts?.tableName ?? "users";
+  const schema = opts?.schema ?? DEFAULT_SCHEMA;
 
-  if (opts?.schema) {
-    return pgSchema(opts.schema).table(tableName, usersTable, (table) => [
+  if (schema !== "public") {
+    return pgSchema(schema).table(tableName, usersTable, (table) => [
       uniqueIndex(`${tableName}_email_idx`).on(table.email),
     ]);
   }
@@ -58,8 +61,8 @@ function createAccountsColumns(userIdRef: AnyPgColumn) {
     name: text("name").notNull(),
     avatarUrl: text("avatar_url"),
     raw: jsonb("raw").notNull(),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   };
 }
 
@@ -68,11 +71,12 @@ export function createAccountsTable(opts: {
   tableName?: string;
   usersTable: UsersTable;
 }) {
-  const tableName = opts.tableName ?? "arcwave_accounts";
+  const tableName = opts.tableName ?? "accounts";
   const columns = createAccountsColumns(opts.usersTable.id);
+  const schema = opts.schema ?? DEFAULT_SCHEMA;
 
-  if (opts?.schema) {
-    return pgSchema(opts.schema).table(tableName, columns, (table) => [
+  if (schema !== "public") {
+    return pgSchema(schema).table(tableName, columns, (table) => [
       uniqueIndex(`${tableName}_provider_account_id_idx`).on(
         table.provider,
         table.providerAccountId,
@@ -102,8 +106,8 @@ function createSessionsColumns(userIdRef: AnyPgColumn) {
     userId: text("user_id")
       .notNull()
       .references(() => userIdRef),
-    expiresAt: timestamp("expires_at").notNull(),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   };
 }
 
@@ -112,11 +116,12 @@ export function createSessionsTable(opts: {
   tableName?: string;
   usersTable: UsersTable;
 }) {
-  const tableName = opts.tableName ?? "arcwave_sessions";
+  const tableName = opts.tableName ?? "sessions";
   const columns = createSessionsColumns(opts.usersTable.id);
+  const schema = opts.schema ?? DEFAULT_SCHEMA;
 
-  if (opts.schema) {
-    return pgSchema(opts.schema).table(tableName, columns);
+  if (schema !== "public") {
+    return pgSchema(schema).table(tableName, columns);
   }
 
   return pgTable(tableName, columns);
@@ -124,3 +129,8 @@ export function createSessionsTable(opts: {
 
 export type SessionsTable = ReturnType<typeof createSessionsTable>;
 export type SessionDB = SessionsTable["$inferSelect"];
+
+export const arcwaveSchema = pgSchema(DEFAULT_SCHEMA);
+export const users = createUsersTable();
+export const accounts = createAccountsTable({ usersTable: users });
+export const sessions = createSessionsTable({ usersTable: users });

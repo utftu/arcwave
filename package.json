@@ -17,13 +17,17 @@
     "./h11": {
       "types": "./dist/adapters/h11/h11.d.ts",
       "default": "./dist/adapters/h11/h11.js"
+    },
+    "./schema": {
+      "types": "./dist/db/schema.d.ts",
+      "default": "./dist/db/schema.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build:js": "bun build ./src/arcwave.ts ./src/adapters/h11/h11.ts --outdir dist --root src --target node --format esm --packages=external",
+    "build:js": "bun build ./src/arcwave.ts ./src/adapters/h11/h11.ts ./src/db/schema.ts --outdir dist --root src --target node --format esm --packages=external",
     "build:types": "tsc -p tsconfig.build.json",
     "build": "bun run build:js && bun run build:types"
   },

@@ -23,8 +23,10 @@ describe("integration: saveAccountWithUser + sessions (PGlite)", () => {
     // Mirrors src/db/schema.ts's column definitions by hand — arcwave has no
     // driver/migration tooling of its own to generate this from the table
     // objects, so keep this in sync if the schema changes.
+    await db.execute(`CREATE SCHEMA arcwave`);
+
     await db.execute(`
-      CREATE TABLE arcwave_users (
+      CREATE TABLE arcwave.users (
         id text PRIMARY KEY,
         email text NOT NULL,
         name text NOT NULL,
@@ -34,13 +36,13 @@ describe("integration: saveAccountWithUser + sessions (PGlite)", () => {
       )
     `);
     await db.execute(
-      `CREATE UNIQUE INDEX arcwave_users_email_idx ON arcwave_users (email)`,
+      `CREATE UNIQUE INDEX users_email_idx ON arcwave.users (email)`,
     );
 
     await db.execute(`
-      CREATE TABLE arcwave_accounts (
+      CREATE TABLE arcwave.accounts (
         id text PRIMARY KEY,
-        user_id text NOT NULL REFERENCES arcwave_users(id),
+        user_id text NOT NULL REFERENCES arcwave.users(id),
         provider text NOT NULL,
         provider_account_id text NOT NULL,
         email text NOT NULL,
@@ -52,14 +54,14 @@ describe("integration: saveAccountWithUser + sessions (PGlite)", () => {
       )
     `);
     await db.execute(
-      `CREATE UNIQUE INDEX arcwave_accounts_provider_account_id_idx
-         ON arcwave_accounts (provider, provider_account_id)`,
+      `CREATE UNIQUE INDEX accounts_provider_account_id_idx
+         ON arcwave.accounts (provider, provider_account_id)`,
     );
 
     await db.execute(`
-      CREATE TABLE arcwave_sessions (
+      CREATE TABLE arcwave.sessions (
         id text PRIMARY KEY,
-        user_id text NOT NULL REFERENCES arcwave_users(id),
+        user_id text NOT NULL REFERENCES arcwave.users(id),
         expires_at timestamptz NOT NULL,
         created_at timestamptz NOT NULL DEFAULT now()
       )
