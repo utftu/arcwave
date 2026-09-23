@@ -33,7 +33,7 @@ runtime provider, e.g. `h11-fs/bun` for `Bun.serve`.)
 ## Providers
 
 ```ts
-import { google, github } from "arcwave";
+import { google, github, yandex } from "arcwave";
 
 const providers = {
   google: google({
@@ -48,13 +48,21 @@ const providers = {
     redirectUri: "http://localhost:3000/auth/github/stage2",
     scope: ["read:user", "user:email"],
   }),
+  yandex: yandex({
+    clientId: process.env.YANDEX_CLIENT_ID!,
+    clientSecret: process.env.YANDEX_CLIENT_SECRET!,
+    redirectUri: "http://localhost:3000/auth/yandex/stage2",
+    scope: ["login:email", "login:info", "login:avatar"],
+  }),
 };
 ```
 
-Both providers only ever return an `Account`. In every case `account.email`
-is guaranteed to be a provider-verified email — Google requires
-`email_verified: true` in the id_token, GitHub requires a `primary && verified`
-entry from `/user/emails` — before `getUser` returns anything at all. This is
+Every provider only ever returns an `Account`, and `account.email` always
+comes from the provider's own account, checked before `getUser` returns
+anything at all: Google requires `email_verified: true` in the id_token,
+GitHub requires a `primary && verified` entry from `/user/emails`. Yandex ID
+exposes no verification flag, so arcwave uses `default_email` — the mailbox
+that comes with the Yandex account itself — and treats it as verified. This is
 what makes automatic account linking by email (see below) safe.
 
 ## h11 adapter

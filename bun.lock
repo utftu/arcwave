@@ -5,7 +5,7 @@
       "name": "arcwave",
       "dependencies": {
         "drizzle-orm": "^0.45",
-        "h11": "^1.0.8",
+        "h11": "*",
         "jose": "^6",
       },
       "devDependencies": {

@@ -29,3 +29,10 @@ export type {
   GithubGetTokenProps,
   GithubTokens,
 } from "./providers/github.ts";
+
+export { YandexAuth, yandex } from "./providers/yandex.ts";
+export type {
+  YandexCreateUrlProps,
+  YandexGetTokenProps,
+  YandexTokens,
+} from "./providers/yandex.ts";
