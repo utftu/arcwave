@@ -1,6 +1,7 @@
 export const COOKIE_STATE = "arcwave_state";
 export const COOKIE_NONCE = "arcwave_nonce";
 export const COOKIE_VERIFIER = "arcwave_verifier";
+export const COOKIE_REDIRECT = "arcwave_redirect";
 export const COOKIE_MAX_AGE = 600; // flow must complete within 10 minutes
 
 export const COOKIE_OPTIONS = {

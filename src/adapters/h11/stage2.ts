@@ -1,22 +1,52 @@
 import { deleteCookie, getCookie, setCookie, type Handler } from "h11";
 import type { Account } from "../../core.ts";
-import type { AccountsTable, SessionsTable, UsersTable } from "../../db/schema.ts";
+import type {
+  AccountDB,
+  AccountsTable,
+  SessionsTable,
+  UsersTable,
+} from "../../db/schema.ts";
 import {
   COOKIE_NONCE,
+  COOKIE_REDIRECT,
   COOKIE_SESSION,
   COOKIE_STATE,
   COOKIE_VERIFIER,
   SESSION_COOKIE_OPTIONS,
 } from "./const.ts";
-import { saveAccountWithUser, type Db } from "./db.ts";
+import { saveAccountWithUser, type Db, type SavedAccount } from "./db.ts";
 import { createSession } from "./session.ts";
 import type { Providers } from "./types.ts";
 import { createRedirect, createReponse, getAuth } from "./utils.ts";
+
+// Replaces the step that writes the user and the account. The step owns its
+// own transaction — that's how app rows become atomic with the user row, the
+// same way the default `saveAccountWithUser` does it.
+export type SaveUserStep = (props: {
+  account: Account;
+  provider: string;
+  db: Db;
+}) => Promise<SavedAccount>;
+
+// Runs once the login has happened: the save step is committed, the session
+// row exists. This is where side effects belong — welcome emails, analytics,
+// calls to other services. A failure here is reported through `onError` and
+// does not fail the login, which is the whole reason it isn't part of the save
+// step.
+export type AfterLogin = (props: {
+  account: Account;
+  provider: string;
+  savedAccount: AccountDB;
+  created: boolean;
+  sessionId: string;
+  db: Db;
+}) => Promise<void> | void;
 
 export function clearAuthCookies(response: Response): void {
   deleteCookie(response, COOKIE_STATE, { path: "/" });
   deleteCookie(response, COOKIE_NONCE, { path: "/" });
   deleteCookie(response, COOKIE_VERIFIER, { path: "/" });
+  deleteCookie(response, COOKIE_REDIRECT, { path: "/" });
 }
 
 function checkConditions(req: Request) {
@@ -64,6 +94,8 @@ export function createStage2Handler({
   sessionsTable,
   redirect,
   onError,
+  saveUser,
+  afterLogin,
 }: {
   providers: Providers;
   provider: string;
@@ -73,6 +105,8 @@ export function createStage2Handler({
   sessionsTable: SessionsTable;
   redirect: string;
   onError?: (message: string) => void;
+  saveUser?: SaveUserStep;
+  afterLogin?: AfterLogin;
 }): Handler {
   return async (ctx) => {
     const auth = getAuth(provider, providers);
@@ -109,15 +143,19 @@ export function createStage2Handler({
       return response;
     }
 
-    let savedAccount: Awaited<ReturnType<typeof saveAccountWithUser>>;
+    let savedAccount: SavedAccount;
     try {
-      savedAccount = await saveAccountWithUser({
-        db,
-        accountsTable,
-        usersTable,
-        account,
-        provider,
-      });
+      if (saveUser) {
+        savedAccount = await saveUser({ account, provider, db });
+      } else {
+        savedAccount = await saveAccountWithUser({
+          db,
+          accountsTable,
+          usersTable,
+          account,
+          provider,
+        });
+      }
     } catch (error) {
       onError?.(`failed to save account: ${error}`);
       const response = createReponse("Failed to save account.", 500);
@@ -130,7 +168,7 @@ export function createStage2Handler({
       sessionId = await createSession({
         db,
         sessionsTable,
-        userId: savedAccount.userId,
+        userId: savedAccount.account.userId,
       });
     } catch (error) {
       onError?.(`failed to create session: ${error}`);
@@ -139,7 +177,24 @@ export function createStage2Handler({
       return response;
     }
 
-    const response = createRedirect(redirect);
+    if (afterLogin) {
+      // The login already succeeded, so a failing side effect must not undo
+      // it — it only goes to `onError`.
+      await Promise.resolve(
+        afterLogin({
+          account,
+          provider,
+          savedAccount: savedAccount.account,
+          created: savedAccount.created,
+          sessionId,
+          db,
+        }),
+      ).catch((error) => onError?.(`afterLogin failed: ${error}`));
+    }
+
+    const response = createRedirect(
+      getCookie(ctx.req, COOKIE_REDIRECT) ?? redirect,
+    );
     setCookie(response, COOKIE_SESSION, sessionId, SESSION_COOKIE_OPTIONS);
     clearAuthCookies(response);
     return response;

@@ -140,11 +140,105 @@ fetches the account, upserts it into the database (`user` row matched/created
 by verified email, `account` row upserted by `(provider, providerAccountId)`),
 creates a session row, and sets the session cookie before redirecting.
 
-`createAuthGuard` protects a route: reads the session cookie, looks the
-session up in `arcwave.sessions` (rejecting expired ones), and either
-attaches the matching `user` row to `ctx.data.user` and lets the chain
-continue, or responds with 401 — or, if `redirectTo` is given, redirects
-there instead.
+### Writing your own rows in the same transaction
+
+`createStage2Handler` takes an optional `saveUser` that replaces the step
+writing the user and the account, so app-owned rows can land in the same
+transaction as the user:
+
+```ts
+import { saveAccount, saveUser } from "arcwave/h11";
+
+createStage2Handler({
+  // ...
+  saveUser: ({ account, provider, db }) =>
+    db.transaction(async (tx) => {
+      const { userId, created } = await saveUser({ db: tx, usersTable: users, account });
+
+      await tx
+        .insert(limits)
+        .values({ userId, requests: 100 })
+        .onConflictDoNothing();
+
+      const saved = await saveAccount({ db: tx, accountsTable: accounts, provider, account, userId });
+      return { account: saved, created };
+    }),
+});
+```
+
+Leave it out and nothing changes: the default step is `saveAccountWithUser`,
+which returns the same `{ account, created }` shape.
+
+Three things to know:
+
+- **The transaction is yours to open.** arcwave passes the plain connection and
+  awaits whatever you return, so atomicity — and the isolation level, if you
+  need one — is decided by your step. Write without a transaction and a failure
+  halfway through leaves the rows it already wrote behind.
+- **Throwing fails the login**: no session is created, the error reaches
+  `onError`, and the person sees a failed login. Whether the user and account
+  rows survive is up to your transaction.
+- **The step runs on every login, not just the first one**, so write your rows
+  as upserts. The user row is upserted by email, the account row by
+  `(provider, providerAccountId)`.
+
+`created` says whether this login inserted the app user row — the person's
+first login overall, whatever provider they used. It comes from Postgres
+`xmax = 0`, so an upsert that updated an existing row reports `false`.
+
+### Side effects after the login: `afterLogin`
+
+Emails, analytics and calls to other services don't belong in the save step:
+they hold the transaction open and break logins whenever the other service is
+down. `afterLogin` runs once the save is committed and the session row exists:
+
+```ts
+createStage2Handler({
+  // ...
+  afterLogin: async ({ account, provider, savedAccount, created, sessionId, db }) => {
+    if (created) {
+      await sendWelcomeEmail(account.email);
+    }
+  },
+});
+```
+
+It is awaited, so slow work delays the redirect — put anything long in a queue.
+A failure is reported through `onError` and does **not** fail the login: the
+person is already in, with a session, and undoing that is exactly what the save
+step is for.
+
+### Coming back to the page the person asked for
+
+`createAuthGuard` appends the requested path to the login route as
+`?redirect=`, `createStage1Handler` keeps it in the short-lived
+`arcwave_redirect` cookie, and `createStage2Handler` sends the person there
+after a successful login, falling back to its own `redirect` when the cookie
+isn't there. Nothing to configure — it works as soon as `redirectTo` is set:
+
+```
+GET /dashboard?tab=1          → 302 /login?redirect=%2Fdashboard%3Ftab%3D1
+GET /auth/google/stage1?redirect=/dashboard?tab=1
+                              → 302 provider, cookie arcwave_redirect=/dashboard?tab=1
+GET /auth/google/stage2?...   → 302 /dashboard?tab=1
+```
+
+The value comes from the query string, so it is checked before being stored.
+By default only local paths pass: anything carrying a host of its own — such
+as `//evil.ru/pwn`, `https://evil.ru`, `/\evil.ru` or a tab-smuggled
+`/<tab>/evil.ru` — is dropped, and the login then ends on the handler's own
+`redirect`. The check asks the URL parser rather than matching strings,
+because the parser is what the browser uses too, tabs, backslashes and all.
+
+Pass your own rule as a RegExp or a function to narrow it further:
+
+```ts
+createStage1Handler({ provider: "google", providers, checkRedirect: /^\/[a-z]/ });
+createStage1Handler({ provider: "google", providers, checkRedirect: (redirect) => redirect.startsWith("/app/") });
+```
+
+A RegExp is applied with `test()`. The default rule is exported as
+`checkRedirectLocal` if you want to combine it with your own.
 
 `createLogoutHandler` deletes the session row (best-effort — a DB failure
 still clears the cookie so the user isn't stuck looking logged in) and

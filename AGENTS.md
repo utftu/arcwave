@@ -35,7 +35,7 @@ src/
   token/              getToken — обмен code на токены
   providers/          google.ts, github.ts, yandex.ts
   db/schema.ts        точка входа "arcwave/schema": функции create*Table и готовые arcwaveSchema, users, accounts, sessions
-  adapters/h11/       точка входа "arcwave/h11": обработчики stage1/stage2, guard, logout, сессии, запросы к БД
+  adapters/h11/       точка входа "arcwave/h11": обработчики stage1/stage2, guard, logout, сессии, запросы к БД, проверка redirect
 ```
 
 ## Экспорты

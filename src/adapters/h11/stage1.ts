@@ -4,9 +4,11 @@ import { createPKCE, randomToken } from "../../crypto/crypto.ts";
 import {
   COOKIE_NONCE,
   COOKIE_OPTIONS,
+  COOKIE_REDIRECT,
   COOKIE_STATE,
   COOKIE_VERIFIER,
 } from "./const.ts";
+import { createRedirectCheck, type CheckRedirect } from "./redirect.ts";
 import type { Providers } from "./types.ts";
 import { createReponse, getAuth } from "./utils.ts";
 
@@ -51,17 +53,31 @@ function createRedirectStage(url: URL, secrets: FlowSecrets): Response {
 export function createStage1Handler({
   provider,
   providers,
+  checkRedirect,
 }: {
   providers: Providers;
   provider?: string;
+  checkRedirect?: CheckRedirect;
 }): Handler {
-  return async () => {
+  const check = createRedirectCheck(checkRedirect);
+
+  return async (ctx) => {
     if (!provider) {
       return createReponse(`Not valid provider: ${provider}`, 518);
     }
     const auth = getAuth(provider, providers);
     const secrets = await generateFlowSecretsStage();
     const url = await createUrlStage({ auth, secrets });
-    return createRedirectStage(url, secrets);
+    const response = createRedirectStage(url, secrets);
+
+    // `redirect` arrives from the query string, so this is where it gets
+    // checked; a value that doesn't pass is dropped and stage2 falls back to
+    // its own `redirect`.
+    const requested = new URL(ctx.req.url).searchParams.get("redirect");
+    if (requested && check(requested)) {
+      setCookie(response, COOKIE_REDIRECT, requested, COOKIE_OPTIONS);
+    }
+
+    return response;
   };
 }

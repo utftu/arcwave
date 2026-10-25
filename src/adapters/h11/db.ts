@@ -1,8 +1,18 @@
+import { sql } from "drizzle-orm";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import type { Account } from "../../core.ts";
 import type { AccountDB, AccountsTable, UsersTable } from "../../db/schema.ts";
 
 export type Db = PgDatabase<any, any, any>;
+
+// `created` tells whether the app user row was inserted by this login — the
+// first login of this person overall, whatever provider they used. It comes
+// from Postgres `xmax = 0`, which is only true for a row the current statement
+// inserted, so an upsert that updated an existing row reports `false`.
+export type SavedAccount = {
+  account: AccountDB;
+  created: boolean;
+};
 
 export async function saveAccount({
   db,
@@ -48,7 +58,7 @@ export async function saveAccount({
   return row;
 }
 
-async function saveUser({
+export async function saveUser({
   db,
   usersTable,
   account,
@@ -56,7 +66,7 @@ async function saveUser({
   db: Db;
   usersTable: UsersTable;
   account: Account;
-}): Promise<string> {
+}): Promise<{ userId: string; created: boolean }> {
   const [user] = await db
     .insert(usersTable)
     .values({
@@ -72,13 +82,16 @@ async function saveUser({
         updatedAt: new Date(),
       },
     })
-    .returning();
+    .returning({
+      id: usersTable.id,
+      created: sql<boolean>`xmax = 0`,
+    });
 
   if (!user) {
     throw new Error("Failed to save user.");
   }
 
-  return user.id;
+  return { userId: user.id, created: user.created };
 }
 
 export async function saveAccountWithUser({
@@ -93,9 +106,17 @@ export async function saveAccountWithUser({
   usersTable: UsersTable;
   provider: string;
   account: Account;
-}): Promise<AccountDB> {
+}): Promise<SavedAccount> {
   return db.transaction(async (tx) => {
-    const userId = await saveUser({ db: tx, usersTable, account });
-    return saveAccount({ db: tx, accountsTable, provider, account, userId });
+    const { userId, created } = await saveUser({ db: tx, usersTable, account });
+    const saved = await saveAccount({
+      db: tx,
+      accountsTable,
+      provider,
+      account,
+      userId,
+    });
+
+    return { account: saved, created };
   });
 }
